@@ -1,0 +1,16 @@
+# 學生課程完成率預測分析專案 - 套件需求
+# Student Course Completion Rate Prediction and Analysis Project - Requirements
+
+# 核心數據處理
+pandas>=2.0.0
+numpy>=1.24.0
+
+# 機器學習
+scikit-learn>=1.3.0
+
+# Excel 檔案讀寫
+openpyxl>=3.1.0
+
+# 可選：資料視覺化（若後續需要）
+# matplotlib>=3.7.0
+# seaborn>=0.12.0
