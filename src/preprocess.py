@@ -44,12 +44,14 @@ def load_and_preprocess_data(input_path: str, output_path: str) -> pd.DataFrame:
 
     # 3. 移除無用欄位
     print("\n[3/5] 移除無用欄位")
-    drop_columns = ['CustID', 'ServiceStartDate', 'WeeksWithService']
+    # 修正：加上 Year 和 Month，避免時間變數洩漏 (Data Leakage)
+    drop_columns = ['CustID', 'ServiceStartDate', 'WeeksWithService', 'Year', 'Month']
     print(f"   - 移除欄位: {drop_columns}")
     print(f"   - 理由:")
     print(f"     * CustID: 學生 ID，無預測價值")
     print(f"     * ServiceStartDate: 避免時間資訊外洩")
     print(f"     * WeeksWithService: 避免時間資訊外洩導致模型作弊")
+    print(f"     * Year, Month: 時間變數會導致模型死記歷史，失去泛化能力 (修正 Bug 2)")
 
     df = df.drop(columns=drop_columns)
     print(f"   - 移除後的欄位數量: {len(df.columns)}")
