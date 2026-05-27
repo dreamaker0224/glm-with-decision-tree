@@ -13,6 +13,7 @@ import matplotlib
 matplotlib.use('Agg')
 import warnings
 warnings.filterwarnings('ignore')
+import joblib
 
 
 def identify_feature_types(df: pd.DataFrame, target_col: str) -> tuple:
@@ -241,6 +242,36 @@ def train_decision_tree_and_split(input_path: str,
 
     print(f"   - 已儲存決策樹視覺化: {dt_plot_output_path}")
     print(f"   - 僅顯示前 3 層（完整樹深度: {model.get_depth()} 層）")
+
+    # 9. 保存模型和元資訊
+    print(f"\n[9/9] 保存決策樹模型")
+
+    model_save_path = "models/decision_tree_model.pkl"
+    metadata_save_path = "models/decision_tree_metadata.pkl"
+
+    Path(model_save_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # 保存模型
+    joblib.dump(model, model_save_path)
+
+    # 保存元資訊（用於預測時的特徵工程）
+    metadata = {
+        'threshold': threshold,
+        'feature_columns': list(X.columns),  # OHE 後的特徵名稱
+        'continuous_features': continuous_features,
+        'categorical_features': categorical_features,
+        'train_score': train_score,
+        'model_params': {
+            'max_depth': model.max_depth,
+            'min_samples_split': model.min_samples_split,
+            'min_samples_leaf': model.min_samples_leaf,
+            'random_state': model.random_state
+        }
+    }
+    joblib.dump(metadata, metadata_save_path)
+
+    print(f"   - 已儲存決策樹模型: {model_save_path}")
+    print(f"   - 已儲存模型元資訊: {metadata_save_path}")
 
     print("\n✓ 決策樹分流完成！")
     print("=" * 80)

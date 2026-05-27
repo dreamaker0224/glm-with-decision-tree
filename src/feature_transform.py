@@ -140,7 +140,11 @@ def transform_features_to_binary(df: pd.DataFrame,
     print(f"\n[2/3] 處理連續變數 (決策樹監督式分段)")
 
     binning_rules = []
-    df_transformed = df[[target_col]].copy()  # 保留目標變數
+    # 如果有目標變數，保留它；否則創建空 DataFrame
+    if target_col is not None:
+        df_transformed = df[[target_col]].copy()
+    else:
+        df_transformed = pd.DataFrame(index=df.index)
 
     for feature in continuous_features:
         print(f"   - 處理 {feature}...")

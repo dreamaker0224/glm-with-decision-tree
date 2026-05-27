@@ -10,6 +10,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
+import joblib
 
 
 def train_logistic_regression(X: pd.DataFrame, y: pd.Series, group_name: str) -> tuple:
@@ -162,6 +163,39 @@ def train_group_logistic_regressions(high_input_path: str,
 
     coefficients_df.to_excel(output_path, index=False, engine='openpyxl')
     print(f"   - 已儲存係數: {output_path}")
+
+    # 保存邏輯回歸模型
+    print(f"\n[保存模型] 儲存邏輯回歸模型")
+
+    high_model_path = "models/logistic_regression_high_group.pkl"
+    low_model_path = "models/logistic_regression_low_group.pkl"
+    lr_metadata_path = "models/logistic_regression_metadata.pkl"
+
+    Path(high_model_path).parent.mkdir(parents=True, exist_ok=True)
+
+    # 保存 High Group 模型
+    joblib.dump(model_high, high_model_path)
+    # 保存 Low Group 模型
+    joblib.dump(model_low, low_model_path)
+
+    # 保存元資訊
+    lr_metadata = {
+        'high_group_features': list(X_high.columns),
+        'low_group_features': list(X_low.columns),
+        'target_col': target_col,
+        'model_params': {
+            'penalty': 'l2',
+            'C': 1.0,
+            'solver': 'lbfgs',
+            'max_iter': 1000,
+            'random_state': 42
+        }
+    }
+    joblib.dump(lr_metadata, lr_metadata_path)
+
+    print(f"   - 已儲存 High Group 模型: {high_model_path}")
+    print(f"   - 已儲存 Low Group 模型: {low_model_path}")
+    print(f"   - 已儲存模型元資訊: {lr_metadata_path}")
 
     print("\n✓ 邏輯回歸訓練完成！")
     print("=" * 80)
