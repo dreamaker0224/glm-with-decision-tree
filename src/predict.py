@@ -32,6 +32,7 @@ class StudentCompletionPredictor:
         # 載入模型和元資訊
         self._load_models()
         self._load_binning_rules()
+        self._load_optimal_thresholds()
 
     def _load_models(self):
         """載入所有模型和元資訊"""
@@ -78,6 +79,44 @@ class StudentCompletionPredictor:
         self.binning_rules = pd.read_excel(binning_rules_path)
 
         print(f"   ✓ 連續變數分段規則（{len(self.binning_rules)} 條）")
+
+    def _load_optimal_thresholds(self):
+        """載入訓練時找到的最佳閾值"""
+
+        print("載入最佳閾值...")
+
+        eval_path = f"{self.output_dir}/4.5_model_evaluation.xlsx"
+
+        if not Path(eval_path).exists():
+            print(f"   ⚠ 找不到評估結果，將使用預設閾值 (0.5)")
+            self.optimal_thresholds = None
+            return
+
+        eval_df = pd.read_excel(eval_path)
+
+        # 提取 High Group 閾值
+        high_group = eval_df[eval_df['Group'] == 'High Group']
+        high_thresholds = {
+            'default': high_group[high_group['Threshold_Type'] == 'default']['Threshold'].iloc[0],
+            'best_f1': high_group[high_group['Threshold_Type'] == 'best_f1']['Threshold'].iloc[0],
+            'best_f2': high_group[high_group['Threshold_Type'] == 'best_f2']['Threshold'].iloc[0]
+        }
+
+        # 提取 Low Group 閾值
+        low_group = eval_df[eval_df['Group'] == 'Low Group']
+        low_thresholds = {
+            'default': low_group[low_group['Threshold_Type'] == 'default']['Threshold'].iloc[0],
+            'best_f1': low_group[low_group['Threshold_Type'] == 'best_f1']['Threshold'].iloc[0],
+            'best_f2': low_group[low_group['Threshold_Type'] == 'best_f2']['Threshold'].iloc[0]
+        }
+
+        self.optimal_thresholds = {
+            'high': high_thresholds,
+            'low': low_thresholds
+        }
+
+        print(f"   ✓ 最佳閾值（High: F1={high_thresholds['best_f1']:.2f}, F2={high_thresholds['best_f2']:.2f}; "
+              f"Low: F1={low_thresholds['best_f1']:.2f}, F2={low_thresholds['best_f2']:.2f}）")
 
     def preprocess_new_data(self, df: pd.DataFrame) -> pd.DataFrame:
         """
@@ -231,12 +270,20 @@ class StudentCompletionPredictor:
 
         return df_transformed
 
-    def predict(self, df: pd.DataFrame, return_details: bool = False) -> pd.DataFrame:
+    def predict(self, df: pd.DataFrame,
+                threshold: str | float | dict = 'best_f1',
+                return_details: bool = False) -> pd.DataFrame:
         """
         對新資料進行預測
 
         參數:
             df: 新資料 DataFrame
+            threshold: 分類閾值，支援以下格式：
+                - 'default': 使用 0.5（兩個群組相同）
+                - 'best_f1': 使用訓練時找到的最佳 F1 閾值（推薦）
+                - 'best_f2': 使用訓練時找到的最佳 F2 閾值（優先召回率）
+                - float: 統一閾值（兩個群組使用相同閾值）
+                - dict: 分別指定，如 {'high': 0.26, 'low': 0.11}
             return_details: 是否返回詳細資訊（群組、預測機率等）
 
         回傳:
@@ -246,6 +293,28 @@ class StudentCompletionPredictor:
         print("\n" + "=" * 80)
         print("學生課程完成率預測")
         print("=" * 80)
+
+        # 解析閾值
+        if isinstance(threshold, str):
+            if self.optimal_thresholds is None:
+                print(f"   ⚠ 無法載入最佳閾值，使用預設值 0.5")
+                high_threshold = 0.5
+                low_threshold = 0.5
+            elif threshold in ['default', 'best_f1', 'best_f2']:
+                high_threshold = self.optimal_thresholds['high'][threshold]
+                low_threshold = self.optimal_thresholds['low'][threshold]
+                print(f"   ✓ 使用 {threshold} 閾值（High: {high_threshold:.2f}, Low: {low_threshold:.2f}）")
+            else:
+                raise ValueError(f"不支援的閾值類型: {threshold}。請使用 'default', 'best_f1', 'best_f2', 數值, 或字典")
+        elif isinstance(threshold, dict):
+            high_threshold = threshold.get('high', 0.5)
+            low_threshold = threshold.get('low', 0.5)
+            print(f"   ✓ 使用自訂閾值（High: {high_threshold:.2f}, Low: {low_threshold:.2f}）")
+        else:
+            # 數值型閾值，兩個群組使用相同值
+            high_threshold = float(threshold)
+            low_threshold = float(threshold)
+            print(f"   ✓ 使用統一閾值: {threshold:.2f}")
 
         print(f"\n[1/5] 預處理資料")
         df_preprocessed = self.preprocess_new_data(df)
@@ -280,9 +349,9 @@ class StudentCompletionPredictor:
                     df_high_transformed[col] = 0
             df_high_transformed = df_high_transformed[high_features]
 
-            print(f"\n[4/5] 邏輯回歸預測 - High Group")
+            print(f"\n[4/5] 邏輯回歸預測 - High Group（閾值: {high_threshold:.2f}）")
             high_proba = self.lr_high_model.predict_proba(df_high_transformed)[:, 1]
-            high_pred = (high_proba >= 0.5).astype(int)
+            high_pred = (high_proba >= high_threshold).astype(int)
 
             # 填入結果
             for i, idx in enumerate(high_indices):
@@ -303,9 +372,9 @@ class StudentCompletionPredictor:
                     df_low_transformed[col] = 0
             df_low_transformed = df_low_transformed[low_features]
 
-            print(f"\n[4/5] 邏輯回歸預測 - Low Group")
+            print(f"\n[4/5] 邏輯回歸預測 - Low Group（閾值: {low_threshold:.2f}）")
             low_proba = self.lr_low_model.predict_proba(df_low_transformed)[:, 1]
-            low_pred = (low_proba >= 0.5).astype(int)
+            low_pred = (low_proba >= low_threshold).astype(int)
 
             # 填入結果
             for i, idx in enumerate(low_indices):
@@ -326,13 +395,16 @@ class StudentCompletionPredictor:
             return results[['Prediction']]
 
 
-def predict_from_file(input_path: str, output_path: str = None):
+def predict_from_file(input_path: str,
+                      output_path: str = None,
+                      threshold: str | float | dict = 'best_f1'):
     """
     從檔案讀取資料並預測
 
     參數:
         input_path: 輸入檔案路徑（Excel 或 CSV）
         output_path: 輸出檔案路徑（可選，預設為 predictions/predictions_{timestamp}.xlsx）
+        threshold: 分類閾值（參見 StudentCompletionPredictor.predict 的說明）
     """
 
     print(f"讀取資料: {input_path}")
@@ -349,7 +421,7 @@ def predict_from_file(input_path: str, output_path: str = None):
     predictor = StudentCompletionPredictor()
 
     # 預測
-    results = predictor.predict(df, return_details=True)
+    results = predictor.predict(df, threshold=threshold, return_details=True)
 
     # 合併原始資料和預測結果
     df_with_predictions = pd.concat([df, results], axis=1)

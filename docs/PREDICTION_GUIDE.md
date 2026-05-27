@@ -22,8 +22,8 @@ df_new = pd.read_excel('new_students_data.xlsx')
 # 初始化預測器
 predictor = StudentCompletionPredictor()
 
-# 進行預測
-results = predictor.predict(df_new, return_details=True)
+# 進行預測（使用最佳 F1 閾值，推薦）
+results = predictor.predict(df_new, threshold='best_f1', return_details=True)
 
 # 查看結果
 print(results)
@@ -37,9 +37,52 @@ from src.predict import predict_from_file
 # 直接從檔案讀取並預測
 predictions = predict_from_file(
     input_path='new_students_data.xlsx',
-    output_path='predictions/my_predictions.xlsx'
+    output_path='predictions/my_predictions.xlsx',
+    threshold='best_f1'  # 使用最佳 F1 閾值（推薦）
 )
 ```
+
+## 閾值設置（重要！）
+
+預測時可以設置分類閾值，這會顯著影響預測結果：
+
+### 預設閾值選項
+
+| 閾值類型 | High Group | Low Group | 說明 | 推薦場景 |
+|---------|-----------|-----------|------|---------|
+| `'best_f1'` | 0.26 | 0.11 | 平衡精準與召回（**推薦**） | 日常預測、資源有限時 |
+| `'best_f2'` | 0.15 | 0.10 | 優先召回率（更多 Complete） | 希望盡量找出所有潛在完成者 |
+| `'default'` | 0.50 | 0.50 | 標準閾值（較保守） | 需要高精準度時 |
+
+### 使用範例
+
+```python
+# 方式 1: 使用預設閾值（推薦：best_f1）
+results = predictor.predict(df, threshold='best_f1')
+
+# 方式 2: 使用 best_f2（優先召回率）
+results = predictor.predict(df, threshold='best_f2')
+
+# 方式 3: 使用統一閾值
+results = predictor.predict(df, threshold=0.3)
+
+# 方式 4: 分別設置 High/Low Group 閾值
+results = predictor.predict(df, threshold={'high': 0.26, 'low': 0.11})
+```
+
+### 閾值選擇建議
+
+**輔導資源有限**：使用 `'best_f1'`
+- 在準確性和覆蓋率之間取得平衡
+- High Group 會識別較多學生，Low Group 較少
+
+**希望覆蓋更多學生**：使用 `'best_f2'`
+- 優先召回率，會識別更多潛在流失學生
+- 可能有較多誤報，但不會遺漏真正需要幫助的學生
+
+**需要高精準度**：使用 `'default'` 或更高閾值
+- 只預測最有信心的案例
+- 會遺漏一些學生，但預測準確性高
 
 ## 輸入資料格式
 
@@ -100,9 +143,9 @@ new_student = pd.DataFrame({
     'AnnualIncome': [50000]
 })
 
-# 預測
+# 預測（使用最佳 F1 閾值）
 predictor = StudentCompletionPredictor()
-result = predictor.predict(new_student, return_details=True)
+result = predictor.predict(new_student, threshold='best_f1', return_details=True)
 
 print(f"群組: {result['Group'].iloc[0]}")
 print(f"決策樹機率: {result['DT_PredictedProba'].iloc[0]:.4f}")
@@ -117,13 +160,30 @@ from src.predict import predict_from_file
 # 從 Excel 檔案讀取並預測
 predictions = predict_from_file(
     input_path='data/new_enrollments_2026.xlsx',
-    output_path='predictions/may_2026_predictions.xlsx'
+    output_path='predictions/may_2026_predictions.xlsx',
+    threshold='best_f1'  # 使用最佳 F1 閾值
 )
 
 # 查看統計
 print(f"總學生數: {len(predictions)}")
 print(f"預測完成: {predictions['Prediction'].sum()} 人")
 print(f"預測流失: {(predictions['Prediction'] == 0).sum()} 人")
+```
+
+```python
+# 範例 3: 比較不同閾值的影響
+import pandas as pd
+from src.predict import StudentCompletionPredictor
+
+df_new = pd.read_excel('new_students.xlsx')
+predictor = StudentCompletionPredictor()
+
+# 使用不同閾值預測
+results_f1 = predictor.predict(df_new, threshold='best_f1', return_details=True)
+results_f2 = predictor.predict(df_new, threshold='best_f2', return_details=True)
+
+print(f"best_f1: 預測 Complete {results_f1['Prediction'].sum()} 人")
+print(f"best_f2: 預測 Complete {results_f2['Prediction'].sum()} 人")
 ```
 
 ## 模型檔案結構
@@ -145,7 +205,11 @@ output/
 1. **資料格式一致性**: 新資料必須與訓練資料的格式一致
 2. **缺失值處理**: 系統會自動填補 `PaymentMethod` 和 `Gender` 的缺失值
 3. **類別值**: 如果新資料包含訓練時沒見過的類別值，該欄位會被設為 0
-4. **預測閾值**: 目前使用 0.5 作為分類閾值，可以根據業務需求調整
+4. **閾值選擇**: 
+   - **推薦使用 `'best_f1'`**：在準確性和覆蓋率之間取得平衡
+   - 使用 `'best_f2'`：如果希望識別更多學生（優先召回率）
+   - 預設 0.5 閾值通常過於保守，不建議使用
+5. **決策樹分群閾值固定**: 決策樹用於分群的閾值 (0.1808) 是固定的，無法修改
 
 ## 更新模型
 
