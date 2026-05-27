@@ -1,7 +1,7 @@
 # 學生課程完成率預測分析報告
 # Student Course Completion Rate Prediction Analysis Report
 
-**報告生成時間**: 2026-05-27 13:16
+**報告生成時間**: 2026-05-27 13:40
 
 ---
 
@@ -327,16 +327,38 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 
 本專案採用 **混合模型架構**：
 
-1. **決策樹分流**: 將學生分為高/低完成機率群
-   - 分流閾值（平均預測機率）: 0.1808
-   - 目的: 識別不同風險等級的學生群體
+#### 1. 決策樹分流 (Decision Tree Segmentation)
 
-2. **特徵工程**:
-   - 連續變數: 使用監督式決策樹分段，轉換為二元變數
-   - 類別變數: 使用 n-1 One-Hot Encoding，避免多重共線性
+使用決策樹模型將學生分為高/低完成機率群，捕捉非線性的群體差異。
 
-3. **分群邏輯回歸**:
-   - 針對兩群學生分別建模，捕捉不同群體的特徵影響差異
+**分流邏輯**:
+- **分流方法**: 以平均預測機率作為閾值
+- **閾值**: 0.1808
+- **決策樹參數**:
+  - 最大深度 (max_depth): 10
+  - 最小分裂樣本數 (min_samples_split): 100
+  - 最小葉節點樣本數 (min_samples_leaf): 50
+
+**分群結果**:
+- High Group (預測機率 ≥ 0.1808): 18,200 位學生 (35.6%)
+  - 實際完成率: 36.2%
+- Low Group (預測機率 < 0.1808): 32,858 位學生 (64.4%)
+  - 實際完成率: 8.1%
+
+**關鍵分流特徵** (Feature Importance):
+- 決策樹主要依據 Credit (信用評分)、AnnualIncome (年收入) 和 ServiceType (課程類型) 進行分群
+- 詳細特徵重要性和決策樹規則請參考: `output/2.5_decision_tree_split_rules.xlsx`
+- 決策樹視覺化請參考: `reports/figures/decision_tree.png`
+
+#### 2. 特徵工程 (Feature Engineering)
+
+對兩個群組分別進行特徵轉換：
+- **連續變數**: 使用監督式決策樹分段，轉換為二元變數
+- **類別變數**: 使用 n-1 One-Hot Encoding，避免多重共線性
+
+#### 3. 分群邏輯回歸 (Group-wise Logistic Regression)
+
+針對兩群學生分別建模，捕捉不同群體的特徵影響差異。
 
 ### 6.2 資料規模
 
@@ -350,11 +372,21 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 
 1. `1_preprocessed_data.xlsx`: 清理後的原始資料
 2. `2_high_group_raw.xlsx`, `2_low_group_raw.xlsx`: 決策樹分流結果
-3. `3_high_group_transformed.xlsx`, `3_low_group_transformed.xlsx`: 轉換為二元變數的特徵矩陣
-4. `3_continuous_bins_rules.xlsx`: 連續變數分段規則與切點
-5. `4_lr_coefficients.xlsx`: 邏輯回歸模型係數
-6. `4.5_model_evaluation.xlsx`: 模型評估指標
-7. `5_iv_results.xlsx`: Information Value 詳細結果
+3. **`2.5_decision_tree_split_rules.xlsx`: 決策樹切分規則與特徵重要性**
+   - Split_Summary: 切分邏輯摘要
+   - Feature_Importance: 特徵重要性排序
+   - Tree_Rules: 決策樹文字規則
+4. `3_high_group_transformed.xlsx`, `3_low_group_transformed.xlsx`: 轉換為二元變數的特徵矩陣
+5. `3_continuous_bins_rules.xlsx`: 連續變數分段規則與切點
+6. `4_lr_coefficients.xlsx`: 邏輯回歸模型係數
+7. `4.5_model_evaluation.xlsx`: 模型評估指標
+8. `5_iv_results.xlsx`: Information Value 詳細結果
+9. **圖表檔案** (`reports/figures/`):
+   - `decision_tree.png`: 決策樹視覺化（前 3 層）
+   - `roc_curves.png`: ROC 曲線比較
+   - `high_group_confusion_matrices.png`: High Group 混淆矩陣
+   - `low_group_confusion_matrices.png`: Low Group 混淆矩陣
+   - `approach_comparison.png`: 方法比較圖表
 
 ---
 
@@ -376,5 +408,5 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 ---
 
 **報告製作**: 機器學習自動化分析系統
-**報告時間**: 2026-05-27 13:16
+**報告時間**: 2026-05-27 13:40
 

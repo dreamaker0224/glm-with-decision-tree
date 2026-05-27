@@ -44,6 +44,8 @@ def main():
 
     high_group_raw = "output/2_high_group_raw.xlsx"
     low_group_raw = "output/2_low_group_raw.xlsx"
+    dt_split_rules = "output/2.5_decision_tree_split_rules.xlsx"
+    dt_plot = "reports/figures/decision_tree.png"
 
     high_group_transformed = "output/3_high_group_transformed.xlsx"
     low_group_transformed = "output/3_low_group_transformed.xlsx"
@@ -72,7 +74,7 @@ def main():
         # Step 2: 決策樹分流
         print("\n▶ 步驟 2/6: 決策樹分流")
         df_high, df_low, threshold, dt_model = train_decision_tree_and_split(
-            preprocessed_data, high_group_raw, low_group_raw
+            preprocessed_data, high_group_raw, low_group_raw, dt_split_rules, dt_plot
         )
 
         # Step 3: 特徵轉換
@@ -138,20 +140,22 @@ def main():
         print(f"  1. 預處理資料:        {preprocessed_data}")
         print(f"  2. High Group 原始:   {high_group_raw}")
         print(f"  3. Low Group 原始:    {low_group_raw}")
-        print(f"  4. High Group 轉換:   {high_group_transformed}")
-        print(f"  5. Low Group 轉換:    {low_group_transformed}")
-        print(f"  6. 分段規則:          {binning_rules}")
-        print(f"  7. 邏輯回歸係數:      {lr_coefficients}")
-        print(f"  8. 模型評估結果:      {evaluation_results}")
-        print(f"  9. 單一方法資料:      {single_approach_transformed}")
-        print(f" 10. 單一方法係數:      {single_lr_coefficients}")
-        print(f" 11. 方法比較結果:      {comparison_results}")
-        print(f" 12. IV 計算結果:       {iv_results}")
-        print(f" 13. 商業洞察報告:      {report_output}")
-        print(f" 14. 評估圖表:          {figures_dir}/")
+        print(f"  4. 決策樹切分規則:    {dt_split_rules}")
+        print(f"  5. High Group 轉換:   {high_group_transformed}")
+        print(f"  6. Low Group 轉換:    {low_group_transformed}")
+        print(f"  7. 分段規則:          {binning_rules}")
+        print(f"  8. 邏輯回歸係數:      {lr_coefficients}")
+        print(f"  9. 模型評估結果:      {evaluation_results}")
+        print(f" 10. 單一方法資料:      {single_approach_transformed}")
+        print(f" 11. 單一方法係數:      {single_lr_coefficients}")
+        print(f" 12. 方法比較結果:      {comparison_results}")
+        print(f" 13. IV 計算結果:       {iv_results}")
+        print(f" 14. 商業洞察報告:      {report_output}")
+        print(f" 15. 評估圖表:          {figures_dir}/")
         print(f"     - ROC curves")
         print(f"     - Confusion matrices")
         print(f"     - Approach comparison")
+        print(f"     - Decision tree visualization")
 
         print(f"\n結束時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 80)
