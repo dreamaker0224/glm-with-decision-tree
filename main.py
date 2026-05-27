@@ -14,6 +14,7 @@ from src.preprocess import load_and_preprocess_data
 from src.decision_tree import train_decision_tree_and_split
 from src.feature_transform import transform_groups
 from src.logistic_regression import train_group_logistic_regressions
+from src.model_evaluation import evaluate_models
 from src.iv_calculator import calculate_iv_for_groups
 from src.report_generator import generate_business_insight_report
 
@@ -45,6 +46,9 @@ def main():
 
     lr_coefficients = "output/4_lr_coefficients.xlsx"
 
+    evaluation_results = "output/4.5_model_evaluation.xlsx"
+    figures_dir = "reports/figures"
+
     iv_results = "output/5_iv_results.xlsx"
 
     report_output = "reports/business_insight_report.md"
@@ -68,22 +72,29 @@ def main():
         )
 
         # Step 4: 邏輯回歸訓練
-        print("\n▶ 步驟 4/6: 分群邏輯回歸")
+        print("\n▶ 步驟 4/7: 分群邏輯回歸")
         model_high, model_low, coefficients_df = train_group_logistic_regressions(
             high_group_transformed, low_group_transformed, lr_coefficients
         )
 
-        # Step 5: IV 計算
-        print("\n▶ 步驟 5/6: 特徵價值計算 (IV)")
+        # Step 5: 模型評估
+        print("\n▶ 步驟 5/7: 模型評估 (ROC, AUC, F1, F2, Confusion Matrix)")
+        high_eval_result, low_eval_result = evaluate_models(
+            high_group_transformed, low_group_transformed, figures_dir
+        )
+
+        # Step 6: IV 計算
+        print("\n▶ 步驟 6/7: 特徵價值計算 (IV)")
         woe_iv_df, iv_summary_df = calculate_iv_for_groups(
             high_group_transformed, low_group_transformed, iv_results
         )
 
-        # Step 6: 生成商業報告
-        print("\n▶ 步驟 6/6: 生成商業洞察報告")
+        # Step 7: 生成商業報告
+        print("\n▶ 步驟 7/7: 生成商業洞察報告")
         generate_business_insight_report(
             high_group_raw, low_group_raw, binning_rules, lr_coefficients,
-            iv_results, report_output, threshold
+            iv_results, evaluation_results, report_output, threshold,
+            high_eval_result, low_eval_result
         )
 
         # 完成摘要
@@ -98,8 +109,12 @@ def main():
         print(f"  5. Low Group 轉換:    {low_group_transformed}")
         print(f"  6. 分段規則:          {binning_rules}")
         print(f"  7. 邏輯回歸係數:      {lr_coefficients}")
-        print(f"  8. IV 計算結果:       {iv_results}")
-        print(f"  9. 商業洞察報告:      {report_output}")
+        print(f"  8. 模型評估結果:      {evaluation_results}")
+        print(f"  9. IV 計算結果:       {iv_results}")
+        print(f" 10. 商業洞察報告:      {report_output}")
+        print(f" 11. 評估圖表:          {figures_dir}/")
+        print(f"     - ROC curves")
+        print(f"     - Confusion matrices")
 
         print(f"\n結束時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 80)

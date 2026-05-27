@@ -15,8 +15,11 @@ def generate_business_insight_report(
     binning_rules_path: str,
     coefficients_path: str,
     iv_results_path: str,
+    evaluation_path: str,
     output_path: str,
-    threshold: float = None
+    threshold: float = None,
+    high_eval_result: dict = None,
+    low_eval_result: dict = None
 ) -> None:
     """
     生成商業洞察報告
@@ -27,8 +30,11 @@ def generate_business_insight_report(
         binning_rules_path: 分段規則路徑
         coefficients_path: 邏輯回歸係數路徑
         iv_results_path: IV 結果路徑
+        evaluation_path: 模型評估結果路徑
         output_path: 報告輸出路徑
         threshold: 決策樹切分閾值
+        high_eval_result: High Group 評估結果（可選）
+        low_eval_result: Low Group 評估結果（可選）
     """
 
     print("=" * 80)
@@ -322,9 +328,148 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 
 ---
 
-## 五、模型技術摘要 (Technical Summary)
+## 五、模型評估與最佳閾值選擇 (Model Evaluation & Optimal Threshold Selection)
 
-### 5.1 模型架構
+### 5.1 模型表現指標
+
+我們使用多種指標評估模型的預測能力，並為不同的業務目標找出最佳分類閾值。
+
+"""
+
+    # 添加模型評估結果
+    if evaluation_path and Path(evaluation_path).exists():
+        try:
+            eval_df = pd.read_excel(evaluation_path)
+
+            # High Group 評估結果
+            high_eval = eval_df[eval_df['Group'] == 'High Group']
+            low_eval = eval_df[eval_df['Group'] == 'Low Group']
+
+            report += """
+#### 5.1.1 High Group (高完成機率群) 模型表現
+
+"""
+            # High Group AUC
+            high_auc = high_eval['AUC'].iloc[0]
+            report += f"**ROC AUC Score**: {high_auc:.4f}\n"
+
+            if high_auc >= 0.8:
+                report += "- 解讀: 優秀 (Excellent) - 模型具有很強的區分能力\n"
+            elif high_auc >= 0.7:
+                report += "- 解讀: 良好 (Good) - 模型具有較好的區分能力\n"
+            elif high_auc >= 0.6:
+                report += "- 解讀: 可接受 (Fair) - 模型具有基本的區分能力\n"
+            else:
+                report += "- 解讀: 不佳 (Poor) - 模型區分能力有限\n"
+
+            report += "\n**不同閾值下的表現比較**:\n\n"
+            report += "| Threshold 類型 | 閾值 | Accuracy | Precision | Recall | F1 Score | F2 Score |\n"
+            report += "|--------------|------|----------|-----------|--------|----------|----------|\n"
+
+            for _, row in high_eval.iterrows():
+                thresh_type = row['Threshold_Type'].replace('_', ' ').title()
+                report += f"| {thresh_type:12s} | {row['Threshold']:.3f} | {row['Accuracy']:.3f} | {row['Precision']:.3f} | {row['Recall']:.3f} | {row['F1_Score']:.3f} | {row['F2_Score']:.3f} |\n"
+
+            report += """
+
+#### 5.1.2 Low Group (低完成機率群) 模型表現
+
+"""
+            # Low Group AUC
+            low_auc = low_eval['AUC'].iloc[0]
+            report += f"**ROC AUC Score**: {low_auc:.4f}\n"
+
+            if low_auc >= 0.8:
+                report += "- 解讀: 優秀 (Excellent) - 模型具有很強的區分能力\n"
+            elif low_auc >= 0.7:
+                report += "- 解讀: 良好 (Good) - 模型具有較好的區分能力\n"
+            elif low_auc >= 0.6:
+                report += "- 解讀: 可接受 (Fair) - 模型具有基本的區分能力\n"
+            else:
+                report += "- 解讀: 不佳 (Poor) - 模型區分能力有限\n"
+
+            report += "\n**不同閾值下的表現比較**:\n\n"
+            report += "| Threshold 類型 | 閾值 | Accuracy | Precision | Recall | F1 Score | F2 Score |\n"
+            report += "|--------------|------|----------|-----------|--------|----------|----------|\n"
+
+            for _, row in low_eval.iterrows():
+                thresh_type = row['Threshold_Type'].replace('_', ' ').title()
+                report += f"| {thresh_type:12s} | {row['Threshold']:.3f} | {row['Accuracy']:.3f} | {row['Precision']:.3f} | {row['Recall']:.3f} | {row['F1_Score']:.3f} | {row['F2_Score']:.3f} |\n"
+
+            report += """
+
+### 5.2 閾值選擇建議
+
+根據不同的業務目標，我們提供以下閾值選擇建議：
+
+"""
+
+            # 最佳 F1 threshold
+            high_f1_row = high_eval[high_eval['Threshold_Type'] == 'best_f1'].iloc[0]
+            low_f1_row = low_eval[low_eval['Threshold_Type'] == 'best_f1'].iloc[0]
+
+            report += f"""
+**1. 平衡精準與召回 (F1 Score 最佳化)**
+- **目標**: 在識別高風險學生的準確性和覆蓋率之間取得平衡
+- **High Group 建議閾值**: {high_f1_row['Threshold']:.3f}
+  - F1 Score: {high_f1_row['F1_Score']:.3f}
+  - 此閾值下會識別出 {high_f1_row['TP'] + high_f1_row['FP']:.0f} 位潛在流失學生
+- **Low Group 建議閾值**: {low_f1_row['Threshold']:.3f}
+  - F1 Score: {low_f1_row['F1_Score']:.3f}
+  - 此閾值下會識別出 {low_f1_row['TP'] + low_f1_row['FP']:.0f} 位潛在流失學生
+
+"""
+
+            # 最佳 F2 threshold
+            high_f2_row = high_eval[high_eval['Threshold_Type'] == 'best_f2'].iloc[0]
+            low_f2_row = low_eval[low_eval['Threshold_Type'] == 'best_f2'].iloc[0]
+
+            report += f"""
+**2. 優先覆蓋率 (F2 Score 最佳化，重視 Recall)**
+- **目標**: 盡可能找出所有潛在流失學生，即使會有較多誤報
+- **High Group 建議閾值**: {high_f2_row['Threshold']:.3f}
+  - F2 Score: {high_f2_row['F2_Score']:.3f}
+  - Recall: {high_f2_row['Recall']:.3f} (捕獲 {high_f2_row['Recall']*100:.1f}% 的流失學生)
+- **Low Group 建議閾值**: {low_f2_row['Threshold']:.3f}
+  - F2 Score: {low_f2_row['F2_Score']:.3f}
+  - Recall: {low_f2_row['Recall']:.3f} (捕獲 {low_f2_row['Recall']*100:.1f}% 的流失學生)
+
+**建議**: 由於輔導資源有限，建議優先使用 **F1 最佳化閾值**，在準確性和覆蓋率之間取得平衡。
+
+"""
+
+            # 添加圖表說明
+            report += """
+### 5.3 視覺化分析
+
+以下圖表提供模型評估的視覺化分析：
+
+1. **ROC Curves**: 展示模型在不同閾值下的 True Positive Rate vs False Positive Rate
+   - 圖檔: `reports/figures/roc_curves.png`
+   - AUC 越接近 1.0 表示模型越好
+
+2. **Confusion Matrices**: 展示不同閾值下的分類結果
+   - High Group: `reports/figures/high_group_confusion_matrices.png`
+   - Low Group: `reports/figures/low_group_confusion_matrices.png`
+   - 包含 Default (0.5)、Best F1、Best F2 三種閾值的比較
+
+![ROC Curves](figures/roc_curves.png)
+
+![High Group Confusion Matrices](figures/high_group_confusion_matrices.png)
+
+![Low Group Confusion Matrices](figures/low_group_confusion_matrices.png)
+
+"""
+
+        except Exception as e:
+            report += f"\n（評估結果讀取失敗: {str(e)}）\n\n"
+
+    report += """
+---
+
+## 六、模型技術摘要 (Technical Summary)
+
+### 6.1 模型架構
 
 本專案採用 **混合模型架構**：
 
@@ -339,13 +484,13 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 3. **分群邏輯回歸**:
    - 針對兩群學生分別建模，捕捉不同群體的特徵影響差異
 
-### 5.2 資料規模
+### 6.2 資料規模
 
 - 總樣本數: {total_students:,}
 - High Group: {len(df_high):,} ({len(df_high)/total_students*100:.1f}%)
 - Low Group: {len(df_low):,} ({len(df_low)/total_students*100:.1f}%)
 
-### 5.3 輸出檔案
+### 6.3 輸出檔案
 
 本分析專案產出以下結果檔案：
 
@@ -354,11 +499,12 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 3. `3_high_group_transformed.xlsx`, `3_low_group_transformed.xlsx`: 轉換為二元變數的特徵矩陣
 4. `3_continuous_bins_rules.xlsx`: 連續變數分段規則與切點
 5. `4_lr_coefficients.xlsx`: 邏輯回歸模型係數
-6. `5_iv_results.xlsx`: Information Value 詳細結果
+6. `4.5_model_evaluation.xlsx`: 模型評估指標
+7. `5_iv_results.xlsx`: Information Value 詳細結果
 
 ---
 
-## 六、結論與後續行動 (Conclusion)
+## 七、結論與後續行動 (Conclusion)
 
 本分析成功建立學生課程完成率的早期預警機制，識別出 **{len(df_low):,}** 位高風險學生需要優先關注。
 

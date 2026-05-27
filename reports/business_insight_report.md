@@ -1,7 +1,7 @@
 # 學生課程完成率預測分析報告
 # Student Course Completion Rate Prediction Analysis Report
 
-**報告生成時間**: 2026-05-26 14:26
+**報告生成時間**: 2026-05-27 12:41
 
 ---
 
@@ -185,14 +185,98 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 
 ---
 
-## 五、模型技術摘要 (Technical Summary)
+## 五、模型評估與最佳閾值選擇 (Model Evaluation & Optimal Threshold Selection)
 
-### 5.1 模型架構
+### 5.1 模型表現指標
+
+我們使用多種指標評估模型的預測能力，並為不同的業務目標找出最佳分類閾值。
+
+
+#### 5.1.1 High Group (高完成機率群) 模型表現
+
+**ROC AUC Score**: 0.6395
+- 解讀: 可接受 (Fair) - 模型具有基本的區分能力
+
+**不同閾值下的表現比較**:
+
+| Threshold 類型 | 閾值 | Accuracy | Precision | Recall | F1 Score | F2 Score |
+|--------------|------|----------|-----------|--------|----------|----------|
+| Default      | 0.500 | 0.656 | 0.566 | 0.208 | 0.305 | 0.239 |
+| Best F1      | 0.260 | 0.462 | 0.393 | 0.893 | 0.545 | 0.712 |
+| Best F2      | 0.150 | 0.368 | 0.364 | 0.998 | 0.533 | 0.740 |
+
+
+#### 5.1.2 Low Group (低完成機率群) 模型表現
+
+**ROC AUC Score**: 0.6977
+- 解讀: 可接受 (Fair) - 模型具有基本的區分能力
+
+**不同閾值下的表現比較**:
+
+| Threshold 類型 | 閾值 | Accuracy | Precision | Recall | F1 Score | F2 Score |
+|--------------|------|----------|-----------|--------|----------|----------|
+| Default      | 0.500 | 0.919 | 0.333 | 0.000 | 0.001 | 0.000 |
+| Best F1      | 0.110 | 0.751 | 0.152 | 0.457 | 0.228 | 0.326 |
+| Best F2      | 0.100 | 0.710 | 0.145 | 0.528 | 0.227 | 0.345 |
+
+
+### 5.2 閾值選擇建議
+
+根據不同的業務目標，我們提供以下閾值選擇建議：
+
+
+**1. 平衡精準與召回 (F1 Score 最佳化)**
+- **目標**: 在識別高風險學生的準確性和覆蓋率之間取得平衡
+- **High Group 建議閾值**: 0.260
+  - F1 Score: 0.545
+  - 此閾值下會識別出 14961 位潛在流失學生
+- **Low Group 建議閾值**: 0.110
+  - F1 Score: 0.228
+  - 此閾值下會識別出 7938 位潛在流失學生
+
+
+**2. 優先覆蓋率 (F2 Score 最佳化，重視 Recall)**
+- **目標**: 盡可能找出所有潛在流失學生，即使會有較多誤報
+- **High Group 建議閾值**: 0.150
+  - F2 Score: 0.740
+  - Recall: 0.998 (捕獲 99.8% 的流失學生)
+- **Low Group 建議閾值**: 0.100
+  - F2 Score: 0.345
+  - Recall: 0.528 (捕獲 52.8% 的流失學生)
+
+**建議**: 由於輔導資源有限，建議優先使用 **F1 最佳化閾值**，在準確性和覆蓋率之間取得平衡。
+
+
+### 5.3 視覺化分析
+
+以下圖表提供模型評估的視覺化分析：
+
+1. **ROC Curves**: 展示模型在不同閾值下的 True Positive Rate vs False Positive Rate
+   - 圖檔: `reports/figures/roc_curves.png`
+   - AUC 越接近 1.0 表示模型越好
+
+2. **Confusion Matrices**: 展示不同閾值下的分類結果
+   - High Group: `reports/figures/high_group_confusion_matrices.png`
+   - Low Group: `reports/figures/low_group_confusion_matrices.png`
+   - 包含 Default (0.5)、Best F1、Best F2 三種閾值的比較
+
+![ROC Curves](figures/roc_curves.png)
+
+![High Group Confusion Matrices](figures/high_group_confusion_matrices.png)
+
+![Low Group Confusion Matrices](figures/low_group_confusion_matrices.png)
+
+
+---
+
+## 六、模型技術摘要 (Technical Summary)
+
+### 6.1 模型架構
 
 本專案採用 **混合模型架構**：
 
 1. **決策樹分流**: 將學生分為高/低完成機率群
-   - 分流閾值（平均預測機率）: 0.1808 (如有提供)
+   - 分流閾值（平均預測機率）: {threshold:.4f} (如有提供)
    - 目的: 識別不同風險等級的學生群體
 
 2. **特徵工程**:
@@ -202,13 +286,13 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 3. **分群邏輯回歸**:
    - 針對兩群學生分別建模，捕捉不同群體的特徵影響差異
 
-### 5.2 資料規模
+### 6.2 資料規模
 
-- 總樣本數: 51,058
-- High Group: 18,200 (35.6%)
-- Low Group: 32,858 (64.4%)
+- 總樣本數: {total_students:,}
+- High Group: {len(df_high):,} ({len(df_high)/total_students*100:.1f}%)
+- Low Group: {len(df_low):,} ({len(df_low)/total_students*100:.1f}%)
 
-### 5.3 輸出檔案
+### 6.3 輸出檔案
 
 本分析專案產出以下結果檔案：
 
@@ -217,13 +301,14 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 3. `3_high_group_transformed.xlsx`, `3_low_group_transformed.xlsx`: 轉換為二元變數的特徵矩陣
 4. `3_continuous_bins_rules.xlsx`: 連續變數分段規則與切點
 5. `4_lr_coefficients.xlsx`: 邏輯回歸模型係數
-6. `5_iv_results.xlsx`: Information Value 詳細結果
+6. `4.5_model_evaluation.xlsx`: 模型評估指標
+7. `5_iv_results.xlsx`: Information Value 詳細結果
 
 ---
 
-## 六、結論與後續行動 (Conclusion)
+## 七、結論與後續行動 (Conclusion)
 
-本分析成功建立學生課程完成率的早期預警機制，識別出 **32,858** 位高風險學生需要優先關注。
+本分析成功建立學生課程完成率的早期預警機制，識別出 **{len(df_low):,}** 位高風險學生需要優先關注。
 
 **立即行動項目**:
 
@@ -234,10 +319,10 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 
 **預期效益**:
 
-若能有效介入低完成機率群，假設挽回 30% 的潛在流失學生，可額外完成約 **9063** 位學生的課程，顯著提升整體完成率與學校聲譽。
+若能有效介入低完成機率群，假設挽回 30% 的潛在流失學生，可額外完成約 **{low_group_priority * 0.3:.0f}** 位學生的課程，顯著提升整體完成率與學校聲譽。
 
 ---
 
 **報告製作**: 機器學習自動化分析系統
-**報告時間**: 2026-05-26 14:26
+**報告時間**: {report_time}
 
