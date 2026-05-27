@@ -16,6 +16,11 @@ from src.feature_transform import transform_groups
 from src.logistic_regression import train_group_logistic_regressions
 from src.model_evaluation import evaluate_models
 from src.iv_calculator import calculate_iv_for_groups
+from src.single_logistic_regression import (
+    create_single_approach_transformed_data,
+    train_single_logistic_regression
+)
+from src.approach_comparison import evaluate_single_model_with_thresholds, compare_approaches
 from src.report_generator import generate_business_insight_report
 
 
@@ -48,6 +53,12 @@ def main():
 
     evaluation_results = "output/4.5_model_evaluation.xlsx"
     figures_dir = "reports/figures"
+
+    # 單一方法相關路徑
+    single_approach_transformed = "output/3_single_approach_transformed.xlsx"
+    single_lr_coefficients = "output/4_single_lr_coefficients.xlsx"
+
+    comparison_results = "output/6_approach_comparison.xlsx"
 
     iv_results = "output/5_iv_results.xlsx"
 
@@ -84,17 +95,39 @@ def main():
         )
 
         # Step 6: IV 計算
-        print("\n▶ 步驟 6/7: 特徵價值計算 (IV)")
+        print("\n▶ 步驟 6/9: 特徵價值計算 (IV)")
         woe_iv_df, iv_summary_df = calculate_iv_for_groups(
             high_group_transformed, low_group_transformed, iv_results
         )
 
-        # Step 7: 生成商業報告
-        print("\n▶ 步驟 7/7: 生成商業洞察報告")
+        # Step 7: 單一邏輯回歸方法（比較用）
+        print("\n▶ 步驟 7/9: 單一邏輯回歸方法 (Single LR Approach)")
+        # 準備單一方法的資料
+        single_df = create_single_approach_transformed_data(
+            preprocessed_data, single_approach_transformed, binning_rules
+        )
+
+        # 訓練單一模型
+        single_result = train_single_logistic_regression(
+            single_approach_transformed, 'ServiceStatus', single_lr_coefficients
+        )
+
+        # Step 8: 方法比較
+        print("\n▶ 步驟 8/9: 方法比較 (Approach Comparison)")
+        # 為單一模型找出最佳閾值
+        single_result = evaluate_single_model_with_thresholds(single_result)
+
+        # 比較兩種方法
+        comparison_df = compare_approaches(
+            high_eval_result, low_eval_result, single_result, figures_dir
+        )
+
+        # Step 9: 生成商業報告
+        print("\n▶ 步驟 9/9: 生成商業洞察報告")
         generate_business_insight_report(
             high_group_raw, low_group_raw, binning_rules, lr_coefficients,
             iv_results, evaluation_results, report_output, threshold,
-            high_eval_result, low_eval_result
+            high_eval_result, low_eval_result, single_result, comparison_df
         )
 
         # 完成摘要
@@ -110,11 +143,15 @@ def main():
         print(f"  6. 分段規則:          {binning_rules}")
         print(f"  7. 邏輯回歸係數:      {lr_coefficients}")
         print(f"  8. 模型評估結果:      {evaluation_results}")
-        print(f"  9. IV 計算結果:       {iv_results}")
-        print(f" 10. 商業洞察報告:      {report_output}")
-        print(f" 11. 評估圖表:          {figures_dir}/")
+        print(f"  9. 單一方法資料:      {single_approach_transformed}")
+        print(f" 10. 單一方法係數:      {single_lr_coefficients}")
+        print(f" 11. 方法比較結果:      {comparison_results}")
+        print(f" 12. IV 計算結果:       {iv_results}")
+        print(f" 13. 商業洞察報告:      {report_output}")
+        print(f" 14. 評估圖表:          {figures_dir}/")
         print(f"     - ROC curves")
         print(f"     - Confusion matrices")
+        print(f"     - Approach comparison")
 
         print(f"\n結束時間: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 80)

@@ -19,7 +19,9 @@ def generate_business_insight_report(
     output_path: str,
     threshold: float = None,
     high_eval_result: dict = None,
-    low_eval_result: dict = None
+    low_eval_result: dict = None,
+    single_eval_result: dict = None,
+    comparison_df: pd.DataFrame = None
 ) -> None:
     """
     生成商業洞察報告
@@ -35,6 +37,8 @@ def generate_business_insight_report(
         threshold: 決策樹切分閾值
         high_eval_result: High Group 評估結果（可選）
         low_eval_result: Low Group 評估結果（可選）
+        single_eval_result: 單一模型評估結果（可選）
+        comparison_df: 方法比較結果（可選）
     """
 
     print("=" * 80)
@@ -464,7 +468,110 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
         except Exception as e:
             report += f"\n（評估結果讀取失敗: {str(e)}）\n\n"
 
-    report += """
+    # 添加方法比較章節
+    if comparison_df is not None and single_eval_result is not None:
+        report += """
+---
+
+## 五之二、建模方法比較 (Modeling Approach Comparison)
+
+本專案實作並比較了兩種建模方法：
+
+### 5.4.1 方法說明
+
+**方法一：兩階段方法 (Two-Stage Approach)**
+1. 使用決策樹將學生分為高/低完成機率群
+2. 針對每群分別訓練獨立的邏輯回歸模型
+3. 優點：捕捉不同風險群體的差異化特徵影響
+4. 缺點：模型複雜度較高，需要維護兩個模型
+
+**方法二：單一模型方法 (Single Model Approach)**
+1. 直接對所有學生訓練單一邏輯回歸模型
+2. 優點：模型簡單，易於解釋和維護
+3. 缺點：無法捕捉不同群體的差異化影響
+
+### 5.4.2 方法表現比較 (Best F1 Threshold)
+
+"""
+
+        # 從 comparison_df 提取比較數據
+        best_f1_comp = comparison_df[comparison_df['Threshold_Type'] == 'best_f1']
+
+        two_stage_high = best_f1_comp[
+            (best_f1_comp['Approach'] == 'Two-Stage') &
+            (best_f1_comp['Group'] == 'High Group')
+        ]
+        two_stage_low = best_f1_comp[
+            (best_f1_comp['Approach'] == 'Two-Stage') &
+            (best_f1_comp['Group'] == 'Low Group')
+        ]
+        single_model = best_f1_comp[best_f1_comp['Approach'] == 'Single Model']
+
+        if not two_stage_high.empty and not two_stage_low.empty and not single_model.empty:
+            tsh = two_stage_high.iloc[0]
+            tsl = two_stage_low.iloc[0]
+            sm = single_model.iloc[0]
+
+            report += f"""
+| 方法 | 群組 | 樣本數 | Complete率 | AUC | F1 Score | Recall | Precision |
+|------|------|--------|-----------|-----|----------|--------|-----------|
+| 兩階段 | High Group | {tsh['Sample_Size']:.0f} | {tsh['Positive_Rate']:.1%} | {tsh['AUC']:.3f} | {tsh['F1_Score']:.3f} | {tsh['Recall']:.3f} | {tsh['Precision']:.3f} |
+| 兩階段 | Low Group | {tsl['Sample_Size']:.0f} | {tsl['Positive_Rate']:.1%} | {tsl['AUC']:.3f} | {tsl['F1_Score']:.3f} | {tsl['Recall']:.3f} | {tsl['Precision']:.3f} |
+| 單一模型 | All Data | {sm['Sample_Size']:.0f} | {sm['Positive_Rate']:.1%} | {sm['AUC']:.3f} | {sm['F1_Score']:.3f} | {sm['Recall']:.3f} | {sm['Precision']:.3f} |
+
+### 5.4.3 方法選擇建議
+
+"""
+
+            # 計算平均表現
+            avg_two_stage_auc = (tsh['AUC'] + tsl['AUC']) / 2
+            avg_two_stage_f1 = (tsh['F1_Score'] + tsl['F1_Score']) / 2
+
+            if avg_two_stage_auc > sm['AUC'] and avg_two_stage_f1 > sm['F1_Score']:
+                report += f"""
+**推薦：兩階段方法 (Two-Stage Approach)**
+
+**理由**：
+- 兩階段方法的平均 AUC ({avg_two_stage_auc:.3f}) 優於單一模型 ({sm['AUC']:.3f})
+- 兩階段方法的平均 F1 Score ({avg_two_stage_f1:.3f}) 優於單一模型 ({sm['F1_Score']:.3f})
+- High Group 和 Low Group 有明顯不同的特徵影響模式，分群建模能更好地捕捉這些差異
+- 雖然模型複雜度較高，但預測效果的提升值得額外的維護成本
+
+**實務應用**：
+1. 使用決策樹模型將新學生分類到 High/Low Group
+2. 根據所屬群組，使用對應的邏輯回歸模型預測流失風險
+3. 針對不同群組採用差異化的輔導策略
+"""
+            else:
+                report += f"""
+**推薦：單一模型方法 (Single Model Approach)**
+
+**理由**：
+- 單一模型的 AUC ({sm['AUC']:.3f}) 與兩階段方法平均表現 ({avg_two_stage_auc:.3f}) 接近
+- 模型更簡單，易於解釋和維護
+- 適合資源有限的情況，無需維護多個模型
+- 對於所有學生使用統一的評分標準，更公平透明
+
+**實務應用**：
+1. 直接使用單一邏輯回歸模型對所有學生評分
+2. 根據預測機率排序，優先輔導高風險學生
+3. 使用相同的特徵影響解釋，制定統一的干預策略
+"""
+
+            # 添加視覺化
+            report += """
+
+### 5.4.4 方法比較視覺化
+
+![Approach Comparison](figures/approach_comparison.png)
+
+上圖比較了兩種方法在 AUC、F1 Score 和 Recall 三個指標上的表現。
+
+"""
+
+    threshold_text = f"{threshold:.4f}" if threshold is not None else "未提供"
+
+    report += f"""
 ---
 
 ## 六、模型技術摘要 (Technical Summary)
@@ -474,7 +581,7 @@ Information Value (IV) 衡量特徵對預測目標的貢獻度。IV 值越高，
 本專案採用 **混合模型架構**：
 
 1. **決策樹分流**: 將學生分為高/低完成機率群
-   - 分流閾值（平均預測機率）: {threshold:.4f} (如有提供)
+   - 分流閾值（平均預測機率）: {threshold_text}
    - 目的: 識別不同風險等級的學生群體
 
 2. **特徵工程**:
